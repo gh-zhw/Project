@@ -1,5 +1,7 @@
 import pygame
 from pygame.locals import KEYDOWN, K_ESCAPE
+import numpy as np
+from PIL import Image
 
 pygame.font.init()
 
@@ -76,6 +78,9 @@ class Window:
         self.save_button = Button(450, 100, 80, 30, 'save')
         self.clear_button = Button(450, 150, 80, 30, 'clear')
 
+        # 保存图像时用
+        self.index = 0
+
         # make word grid
         for i in range(word_size):
             self.word_grid.append([])
@@ -117,10 +122,26 @@ class Window:
                     self.clear_button.reset()
                 elif 450 < x < 530 and 100 < y < 130:
                     self.save_button.clicked()
+                    self.save_grid_word()
                     self.reset_grid()
                 elif 450 < x < 530 and 150 < y < 180:
                     self.clear_button.clicked()
                     self.reset_grid()
+                else:
+                    self.save_button.reset()
+                    self.clear_button.reset()
+
+    def save_grid_word(self):
+        grid_word = []
+        for i in range(word_size):
+            grid_word.append([])
+            for j in range(word_size):
+                grid_word[i].append(int(self.word_grid[i][j].color == BLACK) * 255)
+        word_image = Image.fromarray(np.array(grid_word))
+        word_name = '王'
+        word_image.convert('L').save(f'./dataset/{word_name}/{self.index}.jpg')
+        print(f'save {word_name}/{self.index}.jpg')
+        self.index += 1
 
     def reset_grid(self):
         for i in range(word_size):
