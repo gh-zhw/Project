@@ -1,7 +1,11 @@
 import pygame
+import torch
 from pygame.locals import KEYDOWN, K_ESCAPE
 import numpy as np
 from PIL import Image
+from torchvision import transforms
+from model import CNN
+from dataset import idx_to_class
 
 pygame.font.init()
 
@@ -16,7 +20,7 @@ ORANGE = (255, 165, 0)
 GREY = (128, 128, 128)
 TURQUOISE = (64, 224, 208)
 
-word_size = 28    # 汉字像素
+word_size = 28  # 汉字像素
 grid_size = 400
 spot_size = grid_size // word_size
 
@@ -40,31 +44,47 @@ class Spot:
         self.color = WHITE
 
 
+class Text:
+    def __init__(self, x, y, message, font_size, font_color, background):
+        self.x = x
+        self.y = y
+        self.message = message
+        self.font_size = font_size
+        self.font_color = font_color
+        self.background = background
+
+    def render(self, window, message=None):
+        if message:
+            self.message = message
+        font = pygame.font.SysFont('SimHei', self.font_size)
+        text = font.render(self.message, True, self.font_color, self.background)
+        window.blit(text, (self.x+10, self.y+5))
+
+
 class Button:
-    def __init__(self, x, y, width, height, text):
+    def __init__(self, x, y, width, height, text=None):
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.text = text
+        self.text = Text(self.x, self.y, text, 15, BLACK, WHITE)
         self.color = BLACK
         self.background = WHITE
 
     def render(self, window):
         pygame.draw.rect(window, self.color, (self.x, self.y, self.width, self.height), width=2, border_radius=5)
-
-        font = pygame.font.SysFont('SimHei', 20)
-        surface = font.render(self.text, False, BLACK, self.background)
-        window.blit(surface, (self.x+20, self.y+5))
+        self.text.render(window)
 
     def clicked(self):
-        if self.text == 'save':
-            self.background = GREEN
-        elif self.text == 'clear':
-            self.background = RED
+        if self.text.message == 'save':
+            self.text.background = GREEN
+        elif self.text.message == 'clear':
+            self.text.background = RED
+        elif self.text.message == 'predict':
+            self.text.background = ORANGE
 
     def reset(self):
-        self.background = WHITE
+        self.text.background = WHITE
 
 
 class Window:
@@ -77,6 +97,9 @@ class Window:
         self.window.fill(WHITE)
         self.save_button = Button(450, 100, 80, 30, 'save')
         self.clear_button = Button(450, 150, 80, 30, 'clear')
+        self.pre_button = Button(450, 300, 80, 30, 'predict')
+        self.text = Text(470, 220, '', 30, TURQUOISE, GREY)
+        self.model = None
 
         # 保存图像时用
         self.index = 0
@@ -90,6 +113,7 @@ class Window:
     def update(self):
         self.save_button.render(self.window)
         self.clear_button.render(self.window)
+        self.pre_button.render(self.window)
 
         # render spots
         for i in range(word_size):
@@ -113,6 +137,7 @@ class Window:
             if left:
                 position = pygame.mouse.get_pos()
                 x, y = position
+                # click grid
                 if 0 < x < grid_size and 0 < y < grid_size:
                     r, c = self.pos_to_spot(position)
                     # print(r, c, 'clicked')
@@ -120,24 +145,54 @@ class Window:
                     clicked_spot.write_spot()
                     self.save_button.reset()
                     self.clear_button.reset()
+                    self.pre_button.reset()
+                # click save button
                 elif 450 < x < 530 and 100 < y < 130:
                     self.save_button.clicked()
-                    self.save_grid_word()
+                    # self.save_word_image()
                     self.reset_grid()
+                    self.clear_button.reset()
+                    self.pre_button.reset()
+                # click clear button
                 elif 450 < x < 530 and 150 < y < 180:
                     self.clear_button.clicked()
                     self.reset_grid()
+                    self.save_button.reset()
+                    self.pre_button.reset()
+                # click predict button
+                elif 450 < x < 530 and 300 < y < 330:
+                    self.pre_button.clicked()
+                    pred = self.predict()
+                    self.text.render(self.window, pred)
+                    self.save_button.reset()
+                    self.clear_button.reset()
                 else:
                     self.save_button.reset()
                     self.clear_button.reset()
+                    self.pre_button.reset()
 
-    def save_grid_word(self):
-        grid_word = []
+    def predict(self):
+        if self.model is None:
+            print('load model...')
+            self.model = CNN(28, 1, 8)
+            self.model.load_state_dict(torch.load('./model/model_acc_1.0.pth'))
+        word_image = self.grid2image()
+        transform = transforms.ToTensor()
+        image = transform(word_image).unsqueeze(0).float()
+        output = self.model(image)
+        pred = torch.argmax(output).item()
+        return idx_to_class[pred]
+
+    def grid2image(self):
+        grid_image = []
         for i in range(word_size):
-            grid_word.append([])
+            grid_image.append([])
             for j in range(word_size):
-                grid_word[i].append(int(self.word_grid[i][j].color == BLACK) * 255)
-        word_image = Image.fromarray(np.array(grid_word))
+                grid_image[i].append(int(self.word_grid[i][j].color == BLACK) * 255)
+        return Image.fromarray(np.asarray(grid_image))
+
+    def save_word_image(self):
+        word_image = self.grid2image()
         word_name = '王'
         word_image.convert('L').save(f'./dataset/{word_name}/{self.index}.jpg')
         print(f'save {word_name}/{self.index}.jpg')
@@ -160,7 +215,3 @@ class Window:
             if event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     return True
-
-
-
-
