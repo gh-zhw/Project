@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from torchvision import transforms
 from model import CNN
-from dataset import idx_to_class
+from dataset import idx_to_class, num_classes
 
 pygame.font.init()
 
@@ -174,8 +174,9 @@ class Window:
     def predict(self):
         if self.model is None:
             print('load model...')
-            self.model = CNN(28, 1, 8)
-            self.model.load_state_dict(torch.load('./model/model_acc_1.0.pth'))
+            self.model = CNN(28, 1, num_classes)
+            self.model.load_state_dict(torch.load('./model/model_acc_0.96875.pth'))
+            self.model.eval()
         word_image = self.grid2image()
         transform = transforms.ToTensor()
         image = transform(word_image).unsqueeze(0).float()
@@ -189,11 +190,16 @@ class Window:
             grid_image.append([])
             for j in range(word_size):
                 grid_image[i].append(int(self.word_grid[i][j].color == BLACK) * 255)
-        return Image.fromarray(np.asarray(grid_image))
+        grid_image = np.asarray(grid_image)
+        if np.all(grid_image==0):
+            return None
+        return Image.fromarray(grid_image)
 
     def save_word_image(self):
         word_image = self.grid2image()
-        word_name = '王'
+        if word_image is None:
+            return
+        word_name = '姜'
         word_image.convert('L').save(f'./dataset/{word_name}/{self.index}.jpg')
         print(f'save {word_name}/{self.index}.jpg')
         self.index += 1

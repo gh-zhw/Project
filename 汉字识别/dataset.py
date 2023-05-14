@@ -7,7 +7,7 @@ from utils import random_split
 
 data_dir = './dataset/'
 class_names = os.listdir(data_dir)
-num_class = len(class_names)
+num_classes = len(class_names)
 image_files = glob.glob(data_dir + '*/*.jpg', recursive=True)
 image_num = len(image_files)
 
